@@ -40,7 +40,7 @@ stoplog
 
 ```bash
 curl -o ~/.atuin_session_logger.sh \
-  https://raw.githubusercontent.com/your-username/atuin-session-logger/main/atuin_session_logger.sh
+  https://raw.githubusercontent.com/joshuamschmidt/cli-helpers/refs/heads/main/session_logger/atuin_session_logger.sh
 
 # Add to your shell config
 echo 'source ~/.atuin_session_logger.sh' >> ~/.zshrc   # or ~/.bashrc
@@ -199,4 +199,4 @@ State files are plain `key=value` text — easy to inspect, edit, or script agai
 
 ## Why Atuin instead of a DEBUG trap?
 
-A trap-based logger misses commands run in subshells, sourced scripts, or terminals that crash. Atuin captures everything at the shell level unconditionally. This script just adds a time-windowed view on top of what Atuin already knows.
+A trap-based logger misses commands run in subshells, sourced scripts, or terminals that crash. Atuin captures everything at the shell level unconditionally. This script just adds a time-windowed view on top of what Atuin already knows.  
