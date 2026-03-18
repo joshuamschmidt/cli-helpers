@@ -81,6 +81,49 @@ stoplog() {
     echo "   $(dumplog | grep -cv '^#' 2>/dev/null || echo '?') commands captured. Run 'dumplog' or 'jira-summary'."
 }
 
+
+# ---------------------------------------------------------------------------
+# describe [session-name] — write/update a description for a session
+# Inline heredoc prompt — Ctrl-D to save, Ctrl-C to cancel.
+# Stored at ~/.session_logs/<name>.desc alongside the .state file.
+# ---------------------------------------------------------------------------
+describe() {
+    local name="${1:-$_ATUIN_SESSION_NAME}"
+    if [[ -z "$name" ]]; then
+        echo "No active session and no name given. Run 'startlog' first or pass a session name." >&2
+        return 1
+    fi
+
+    local descfile="$_SESSION_LOG_DIR/${name}.desc"
+    mkdir -p "$_SESSION_LOG_DIR"
+
+    # Show existing content if any
+    if [[ -f "$descfile" && -s "$descfile" ]]; then
+        echo "Current description for '$name':"
+        echo "────────────────────────────────"
+        cat "$descfile"
+        echo "────────────────────────────────"
+        echo "Enter new description below (replaces above). Ctrl-D to save, Ctrl-C to cancel."
+    else
+        echo "Description for '$name' — Ctrl-D when done, Ctrl-C to cancel:"
+    fi
+
+    local content
+    if ! content=$(cat); then
+        echo "Cancelled." >&2
+        return 1
+    fi
+
+    if [[ -z "$content" ]]; then
+        echo "Empty input — description unchanged." >&2
+        return 1
+    fi
+
+    printf '%s
+' "$content" > "$descfile"
+    echo "✓  Description saved to $descfile"
+}
+
 # ---------------------------------------------------------------------------
 # loadlog — restore a named session by name
 # ---------------------------------------------------------------------------
@@ -183,6 +226,15 @@ dumplog() {
     echo "# Session:  $s_name"
     echo "# From:     $s_start"
     echo "# To:       ${s_end:-ongoing}"
+
+    local descfile="$_SESSION_LOG_DIR/${s_name}.desc"
+    if [[ -f "$descfile" && -s "$descfile" ]]; then
+        echo "# Description:"
+        while IFS= read -r line; do
+            echo "#   $line"
+        done < "$descfile"
+    fi
+
     echo "#"
     _atuin_search "$s_start" "$s_end"
 }
@@ -219,20 +271,30 @@ jira-summary() {
         return 1
     fi
 
+    # Load description file if present
+    local description=""
+    local descfile="$_SESSION_LOG_DIR/${s_name}.desc"
+    [[ -f "$descfile" && -s "$descfile" ]] && description=$(cat "$descfile")
+
     echo "⏳ Generating Jira summary via Claude..."
 
     local prompt="You are a senior software engineer writing a Jira ticket based on a shell session log.
 
-The log format is:  HH:MM:SS<TAB>command
-
-Shell session log:
-\`\`\`
-${log_content}
-\`\`\`
+The log format is:  YYYY-MM-DD HH:MM:SS<TAB>command
+${description:+
+The engineer provided this description of the work:
+---
+$description
+---
+}
 ${extra_context:+
 Additional context from the engineer:
 $extra_context
 }
+Shell session log:
+\`\`\`
+${log_content}
+\`\`\`
 
 Produce a professional Jira ticket with these exact sections:
 
@@ -242,7 +304,7 @@ Produce a professional Jira ticket with these exact sections:
 **Acceptance Criteria** (bullet list, inferred from the work)
 **Labels** (comma-separated, e.g. backend, infra, bugfix, feature)
 
-Be specific. Infer intent from the commands. Avoid vague language."
+Be specific. Infer intent from the commands and description. Avoid vague language."
 
     local payload
     payload=$(python3 -c "
@@ -341,6 +403,7 @@ Produce a professional progress update/comment with these sections:
     _call_claude "$prompt"
 }
 
+
 # ---------------------------------------------------------------------------
 # sessionhelp
 # ---------------------------------------------------------------------------
@@ -348,33 +411,37 @@ sessionhelp() {
     cat <<'EOF'
 Atuin Session Logger
 ────────────────────
-  startlog [name]          Mark session start (uses Atuin's history)
-  stoplog                  Mark session end
-  dumplog                  Print commands from start→stop window
-  lslogs                   List all saved sessions
-  loadlog <name>           Restore a previous session (works across terminals)
-  jira-summary [context]   Generate Jira ticket via Claude API
+  startlog [name]                  Mark session start
+  describe [name]                  Write/update session description (Ctrl-D to save)
+  stoplog                          Mark session end
+  dumplog [name]                   Print description + commands for current or named session
+  lslogs                           List all saved sessions
+  loadlog <name>                   Restore a previous session
+  jira-summary [name] [context]    Generate Jira ticket via Claude API
+  jira-update  [name] [context]    Create a progress update for an existing ticket
 
 Environment Variables
 ─────────────────────
   ANTHROPIC_API_KEY        Required for jira-summary
   ATUIN_SESSION_LOG_DIR    Where state + summaries are saved (default: ~/.session_logs)
 
-How it works
-────────────
-  startlog/stoplog write timestamps to ~/.session_logs/.current_session
-  and a named <session>.state file. State auto-restores in new terminals,
-  so dumplog and jira-summary work even after closing the original shell.
-
 Typical workflow
 ────────────────
   startlog fix-auth-bug
+  describe                          # write intent/context before you start
   # ... do your work ...
+  describe                          # optionally update mid-session
   stoplog
-  jira-summary "Race condition in OAuth token refresh"
-
-  # Later, in a new terminal:
-  loadlog fix-auth-bug
   jira-summary
+
+  # Named session from any terminal:
+  dumplog fix-auth-bug
+  jira-summary fix-auth-bug "extra context"
+
+Files written per session
+─────────────────────────
+  ~/.session_logs/<name>.state      timestamps (auto-restored on new shell)
+  ~/.session_logs/<name>.desc       your description
+  ~/.session_logs/<name>_jira_*.md  generated ticket drafts
 EOF
 }
