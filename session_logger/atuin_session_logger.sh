@@ -296,6 +296,52 @@ for block in data.get('content', []):
 }
 
 # ---------------------------------------------------------------------------
+# jira-update [session-name] <jira-key> [extra context...] — update a Jira ticket
+# If session-name matches a saved .state file, uses that session for the log.
+# Requires a <jira-key> to identify the ticket being updated.
+# Generates a progress update/comment draft via Claude API.
+# ---------------------------------------------------------------------------
+
+jira-update() {
+    local jira_key="$1"
+    shift
+    local session_arg=""
+    
+    # Check if the first arg was actually a session name
+    if [[ -f "$_SESSION_LOG_DIR/$jira_key.state" ]]; then
+        session_arg="$jira_key"
+        jira_key="$1"
+        shift
+    fi
+
+    if [[ -z "$jira_key" ]]; then
+        echo "Usage: jira-update [session-name] <JIRA-KEY> [extra context]" >&2
+        return 1
+    fi
+
+    local log_content
+    log_content=$(dumplog "$session_arg")
+    local extra_context="${*}"
+
+    local prompt="You are a senior engineer providing a progress update for Jira ticket $jira_key.
+    
+Log:
+\`\`\`
+$log_content
+\`\`\`
+Context: $extra_context
+
+Produce a professional progress update/comment with these sections:
+**Progress Update**: (What specifically was achieved in this session)
+**Technical Changes**: (Key files touched or commands run)
+**Next Steps**: (What remains to be done for $jira_key)
+"
+
+    echo "⏳ Generating update for $jira_key via Claude..."
+    _call_claude "$prompt"
+}
+
+# ---------------------------------------------------------------------------
 # sessionhelp
 # ---------------------------------------------------------------------------
 sessionhelp() {
