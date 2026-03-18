@@ -22,7 +22,7 @@
 #   curl             for Jira + Claude API calls
 #   python3          for JSON handling and ADF conversion
 #
-# ENVIRONMENT (set in ~/.config/atuin-session-logger/logger-env):
+# ENVIRONMENT (set in ~/.config/atuin-session-logger/env):
 #   ANTHROPIC_API_KEY   required for jira-summary, jira-update
 #   JIRA_BASE_URL       e.g. https://yourworkspace.atlassian.net
 #   JIRA_EMAIL          your Atlassian account email
@@ -225,7 +225,9 @@ _atuin_search() {
     local after="$1"
     local before="${2:-$(date '+%Y-%m-%dT%H:%M:%S')}"
 
-    atuin search \
+    # ATUIN_LOG=error suppresses the ZLE "widgets can only be called when
+    # ZLE is active" warning that fires when atuin is called in a subshell
+    ATUIN_LOG=error atuin search \
         --after  "$after" \
         --before "$before" \
         --format "{time}\t{command}" \
