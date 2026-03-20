@@ -1,0 +1,6 @@
+# --- User Requested / macOS ---
+.DS_Store
+.github/.DS_Store
+scripts/.DS_Store
+".github/workflows/Icon\r"
+
